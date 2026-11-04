@@ -41,7 +41,7 @@ wavenumber,intensity
 
 - Rows are sorted by ascending wavenumber. WiRE stores them in descending order.
 - A single-spectrum file produces `<name>.csv`.
-- A multi-spectrum file (map or series) produces one `<name>.csv` in OpenSpecy's native wide format. Each row is a spectrum. The columns are the wavenumbers as integers, followed by `x,y,file_name`, where `x,y` are the stage positions (left blank if the file has none). If rounding to integers would create duplicate column names, the tool keeps 4 decimals instead. With `--split` it writes long-format `<name>_0001.csv`, `<name>_0002.csv` and so on.
+- A multi-spectrum file (map or series) produces one `<name>.csv` in OpenSpecy's native wide format. Each row is a spectrum. The columns are integer wavenumbers, followed by `x,y,file_name`, where `x,y` are the stage positions (left blank if the file has none). This is the same layout that OpenSpecy's `write_spec()` produces. OpenSpecy only recognises the layout when the column names are integers. So if the point spacing is below about 1 cm⁻¹, which happens near 2000 cm⁻¹ in the sample, the spectra are linearly interpolated onto a 1 cm⁻¹ grid. Otherwise each wavenumber is simply rounded. With `--split` it writes long-format `<name>_0001.csv`, `<name>_0002.csv` and so on.
 - The exit code is non-zero if any file fails. The remaining files are still converted.
 
 ### GUI
@@ -54,7 +54,7 @@ Add `.wdf` files, optionally choose an output folder, pick a header style, and p
 
 ## Phase 2: OpenSpecy identification (optional)
 
-1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also finds `C:\Program Files\R\R-*\bin\Rscript.exe`.
+1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also looks in `C:\Program Files\R\R-*` and in the per-user location `%LOCALAPPDATA%\Programs\R\R-*`. For a per-user install without admin rights, run `winget install RProject.R --override "/VERYSILENT /CURRENTUSER"`.
 2. In R, run `install.packages("OpenSpecy")` (CRAN 2.0.x).
 3. Run:
 
@@ -63,9 +63,9 @@ wdf2csv data_folder/ -o out/ --match             # top 5 matches, "derivative" l
 wdf2csv sample.wdf --match --library nobaseline --top-n 10
 ```
 
-The first run downloads the OpenSpecy reference library through `get_lib()`. This is a large download, and it is cached afterwards. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, spectrum_identity, material_class, …`. The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected.
+The first run downloads the OpenSpecy reference library through `get_lib()` (`derivative` is about 46 MB). It is cached inside the R package folder. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, spectrum_identity, material_class, …`. The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected.
 
-The library is filtered to Raman spectra (`filter_spec`). Processing follows the OpenSpecy defaults for each library, and `match_spec(conform = TRUE)` then aligns each spectrum to the library axis:
+Only the Raman part of the library is used (`lib$raman` in OpenSpecy 2.x, `filter_spec` for older combined libraries). Each spectrum gets its own top N, sorted by `match_val` (Pearson correlation). Processing follows the OpenSpecy defaults for each library, and `match_spec(conform = TRUE)` then aligns each spectrum to the library axis:
 - `derivative`: Savitzky–Golay smoothing with first derivative (poly 3, window 11), then normalise.
 - `nobaseline`: baseline subtraction, then normalise.
 
@@ -86,6 +86,7 @@ mypy
 ## Limitations
 
 - Only spectral intensities and wavenumbers are exported. Metadata such as the laser wavelength and the white-light image is not written to the CSV. Map stage positions are written only in the wide format.
-- Map/wide output was tested with synthetic data only, because no map `.wdf` sample was available.
-- Phase 2 targets OpenSpecy 2.0.x. **It has not been run end-to-end yet**, because R was not installed on the development machine. If it fails, check `packageVersion("OpenSpecy")`.
+- Map/wide output was tested with synthetic data built from the sample, including through OpenSpecy's `read_any` and `match_spec`. It has not been tested with a real map `.wdf`.
+- Phase 2 was verified end to end with R 4.6.2 and OpenSpecy 2.0.3 on Windows, using both the `derivative` and `nobaseline` libraries. Other OpenSpecy versions may differ, so check `packageVersion("OpenSpecy")` if it fails. The test suite runs an R end-to-end test when Rscript is found and skips it otherwise.
+- The match scores are only a screening aid. On the sample, the best `derivative` match scores about 0.42 (whewellite) and the best `nobaseline` match about 0.69 (phlogopite). These are low correlations, so check the spectra by eye before trusting an identification.
 - File parsing depends on `renishaw-wdf`. Multitrack files export track 0 only.

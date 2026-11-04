@@ -71,25 +71,34 @@ def write_spectrum_csv(
             w.writerow((f"{wn:.4f}", f"{it:.6g}"))
 
 
-def wavenumber_labels(wavenumber: NDArray[np.float64]) -> list[str]:
-    """Integer column names as in OpenSpecy's wide format; decimals if rounding collides."""
+def integer_axis(
+    wavenumber: NDArray[np.float64], intensities: NDArray[np.float64]
+) -> tuple[NDArray[np.int64], NDArray[np.float64]]:
+    """Put spectra on integer wavenumbers, as OpenSpecy's wide format requires.
+
+    OpenSpecy only recognises a wide CSV when its spectral column names are plain
+    integers. If rounding the axis gives unique values it is used as is; otherwise
+    (spacing below ~1 cm-1) the spectra are linearly interpolated onto a 1 cm-1 grid.
+    """
     rounded = np.rint(wavenumber).astype(np.int64)
     if np.unique(rounded).size == rounded.size:
-        return [str(v) for v in rounded]
-    return [f"{v:.4f}" for v in wavenumber]
+        return rounded, intensities
+    grid = np.arange(np.ceil(wavenumber[0]), np.floor(wavenumber[-1]) + 1).astype(np.int64)
+    resampled = np.vstack([np.interp(grid, wavenumber, row) for row in intensities])
+    return grid, resampled
 
 
 def write_wide_csv(out_path: Path, data: WdfData) -> None:
     """OpenSpecy native wide CSV: one row per spectrum, wavenumber columns, then x,y,file_name."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    n = data.intensities.shape[0]
+    axis, intensities = integer_axis(data.wavenumber, data.intensities)
     with out_path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow([*wavenumber_labels(data.wavenumber), "x", "y", "file_name"])
-        for i in range(n):
+        w.writerow([*(str(v) for v in axis), "x", "y", "file_name"])
+        for i, row in enumerate(intensities):
             px = f"{data.x[i]:.4f}" if data.x is not None else ""
             py = f"{data.y[i]:.4f}" if data.y is not None else ""
-            w.writerow([*(f"{v:.6g}" for v in data.intensities[i]), px, py, data.source.name])
+            w.writerow([*(f"{v:.6g}" for v in row), px, py, data.source.name])
 
 
 def convert_file(

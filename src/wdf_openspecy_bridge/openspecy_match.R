@@ -1,5 +1,5 @@
 # Batch identification with the OpenSpecy R package (tested API: CRAN 2.0.x).
-# Pipeline: read_any -> filter_spec (Raman library) -> process_spec -> match_spec(conform = TRUE)
+# Pipeline: read_any -> Raman library (lib$raman / filter_spec) -> process_spec -> match_spec(conform = TRUE)
 # Usage: Rscript openspecy_match.R <out.csv> <library> <top_n> <in1.csv> [in2.csv ...]
 #   library: "derivative" (default, recommended) or "nobaseline"
 
@@ -15,11 +15,20 @@ top_n <- as.integer(args[[3]])
 inputs <- args[-(1:3)]
 
 # Downloads the library once into the package's cache directory.
-if (!isTRUE(tryCatch(all(check_lib(lib_name)), error = function(e) FALSE))) {
+lib_ok <- tryCatch({
+  check_lib(lib_name, condition = "error")
+  TRUE
+}, error = function(e) FALSE)
+if (!lib_ok) {
   get_lib(lib_name)
 }
 lib <- load_lib(lib_name)
-lib <- filter_spec(lib, logic = tolower(lib$metadata$spectrum_type) == "raman")
+# OpenSpecy 2.x ships libraries split by technique; older ones are one object to filter.
+lib <- if (is_OpenSpecy(lib)) {
+  filter_spec(lib, logic = tolower(lib$metadata$spectrum_type) == "raman")
+} else {
+  lib$raman
+}
 
 use_derivative <- lib_name == "derivative"
 
@@ -34,8 +43,9 @@ results <- lapply(inputs, function(f) {
     make_rel = TRUE
   )
   hits <- match_spec(x, library = lib, na.rm = TRUE, conform = TRUE, top_n = top_n,
-                     add_library_info = TRUE, order = x)
+                     add_library_metadata = "sample_name")
   hits <- as.data.frame(hits)
+  hits <- hits[order(hits$object_id, -hits$match_val), , drop = FALSE]
   hits$input_file <- basename(f)
   group <- if ("object_id" %in% names(hits)) hits$object_id else rep(1, nrow(hits))
   hits$rank <- ave(seq_len(nrow(hits)), group, FUN = seq_along)

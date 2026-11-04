@@ -11,15 +11,19 @@ R_SCRIPT = Path(__file__).with_name("openspecy_match.R")
 
 
 def find_rscript() -> str | None:
-    """Locate Rscript on PATH, or in the standard Windows install location."""
+    """Locate Rscript on PATH, or in the standard Windows install locations."""
     found = shutil.which("Rscript")
     if found:
         return found
     if os.name == "nt":
-        base = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "R"
-        candidates = sorted(base.glob("R-*/bin/Rscript.exe"), reverse=True)
-        if candidates:
-            return str(candidates[0])
+        bases = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "R",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "R",  # per-user install
+        ]
+        for base in bases:
+            candidates = sorted(base.glob("R-*/bin/Rscript.exe"), reverse=True)
+            if candidates:
+                return str(candidates[0])
     return None
 
 

@@ -81,9 +81,43 @@ def test_multi_spectrum_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert read_rows(outs[1])[1:] == [["100.2000", "3"], ["200.0000", "4"], ["300.0000", "5"]]
 
 
-def test_wavenumber_labels_fall_back_to_decimals() -> None:
+def test_integer_axis_resamples_dense_spectra() -> None:
     import numpy as np
 
-    from wdf_openspecy_bridge.convert import wavenumber_labels
+    from wdf_openspecy_bridge.convert import integer_axis
 
-    assert wavenumber_labels(np.array([100.1, 100.4, 101.0])) == ["100.1000", "100.4000", "101.0000"]
+    wn = np.array([100.0, 100.5, 101.0, 101.5, 102.0])
+    axis, y = integer_axis(wn, np.array([[0.0, 1.0, 2.0, 3.0, 4.0]]))
+    assert axis.tolist() == [100, 101, 102]
+    assert y.tolist() == [[0.0, 2.0, 4.0]]
+
+
+def test_wide_csv_of_sample_has_integer_columns(tmp_path: Path) -> None:
+    from wdf_openspecy_bridge.convert import write_wide_csv
+
+    data = read_wdf(SAMPLE)
+    out = tmp_path / "wide.csv"
+    write_wide_csv(out, data)
+    header = read_rows(out)[0]
+    assert header[-3:] == ["x", "y", "file_name"]
+    labels = header[:-3]
+    assert all(h.isdigit() for h in labels)
+    assert len(set(labels)) == len(labels)
+
+
+@pytest.mark.skipif(
+    __import__("wdf_openspecy_bridge.openspecy").openspecy.find_rscript() is None,
+    reason="R / OpenSpecy not installed",
+)
+def test_openspecy_match_end_to_end(tmp_path: Path) -> None:
+    from wdf_openspecy_bridge.openspecy import run_match
+
+    (spec,) = convert_file(SAMPLE, tmp_path)
+    out = run_match([spec], tmp_path / "matches.csv", top_n=3)
+    rows = read_rows(out)
+    header, body = rows[0], rows[1:]
+    assert len(body) == 3
+    rank = header.index("rank")
+    score = [float(r[header.index("match_val")]) for r in body]
+    assert [r[rank] for r in body] == ["1", "2", "3"]
+    assert score == sorted(score, reverse=True)
