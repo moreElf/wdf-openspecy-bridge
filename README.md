@@ -2,8 +2,8 @@
 
 A local tool that converts Renishaw WiRE `.wdf` Raman spectra into CSV files you can load into [OpenSpecy](https://openanalysis.org/openspecy/). It runs on Windows and macOS.
 
-- **Phase 1 (included):** `.wdf` → CSV, with a CLI (`wdf2csv`) and a small GUI (`wdf2csv-gui`). It reads files with the open-source [renishawWiRE](https://github.com/alchem0x2A/py-wdf-reader) `WDFReader`. Renishaw's WiRE software is not needed.
-- **Phase 2 (optional):** identifies each spectrum through the OpenSpecy **R package** (`read_any` → `process_spec` → `match_spec`) and writes the top-N library matches. This needs R. It does not use openspecy.org or any browser automation.
+- **Phase 1 (included):** `.wdf` → CSV, with a CLI (`wdf2csv`) and a small GUI (`wdf2csv-gui`). It reads files with Renishaw's open-source (Apache-2.0) Python reader [`renishaw-wdf`](https://pypi.org/project/renishaw-wdf/). The WiRE software itself is not needed. The output is a CSV that OpenSpecy can read, because OpenSpecy cannot open `.wdf` files and has no REST API.
+- **Phase 2 (optional):** identifies each spectrum through the OpenSpecy **R package** (`read_any` → `filter_spec` (Raman) → `process_spec` → `match_spec(conform = TRUE)`) and writes the top-N library matches. This needs R. It does not use openspecy.org or any browser automation.
 
 ## Install
 
@@ -27,7 +27,7 @@ wdf2csv sample.wdf                       # writes sample.csv next to the input
 wdf2csv a.wdf b.wdf -o out/              # several files at once
 wdf2csv data_folder/ -o out/             # every .wdf in a folder (not recursive)
 wdf2csv sample.wdf --header hash         # header #Wave,#Intensity instead of wavenumber,intensity
-wdf2csv map.wdf --wide                   # multi-spectrum file -> one wide CSV
+wdf2csv map.wdf --split                  # multi-spectrum file -> one long CSV per spectrum
 ```
 
 Output format (default):
@@ -41,7 +41,7 @@ wavenumber,intensity
 
 - Rows are sorted by ascending wavenumber. WiRE stores them in descending order.
 - A single-spectrum file produces `<name>.csv`.
-- A multi-spectrum file (map or series) produces one file per spectrum, `<name>_0001.csv`, `<name>_0002.csv` and so on. With `--wide` it produces a single `<name>_wide.csv` that has one wavenumber column plus `intensity_0001…`.
+- A multi-spectrum file (map or series) produces one `<name>.csv` in OpenSpecy's native wide format. Each row is a spectrum. The columns are the wavenumbers as integers, followed by `x,y,file_name`, where `x,y` are the stage positions (left blank if the file has none). If rounding to integers would create duplicate column names, the tool keeps 4 decimals instead. With `--split` it writes long-format `<name>_0001.csv`, `<name>_0002.csv` and so on.
 - The exit code is non-zero if any file fails. The remaining files are still converted.
 
 ### GUI
@@ -55,7 +55,7 @@ Add `.wdf` files, optionally choose an output folder, pick a header style, and p
 ## Phase 2: OpenSpecy identification (optional)
 
 1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also finds `C:\Program Files\R\R-*\bin\Rscript.exe`.
-2. In R, run `install.packages("OpenSpecy")`.
+2. In R, run `install.packages("OpenSpecy")` (CRAN 2.0.x).
 3. Run:
 
 ```bash
@@ -65,9 +65,9 @@ wdf2csv sample.wdf --match --library nobaseline --top-n 10
 
 The first run downloads the OpenSpecy reference library through `get_lib()`. This is a large download, and it is cached afterwards. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, spectrum_identity, material_class, …`. The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected.
 
-Processing follows the OpenSpecy defaults for each library:
-- `derivative`: conform to the library wavenumbers, Savitzky–Golay smoothing with first derivative (poly 3, window 11), then normalise.
-- `nobaseline`: conform, baseline subtraction, then normalise.
+The library is filtered to Raman spectra (`filter_spec`). Processing follows the OpenSpecy defaults for each library, and `match_spec(conform = TRUE)` then aligns each spectrum to the library axis:
+- `derivative`: Savitzky–Golay smoothing with first derivative (poly 3, window 11), then normalise.
+- `nobaseline`: baseline subtraction, then normalise.
 
 The R script is `src/wdf_openspecy_bridge/openspecy_match.R`. You can also run it directly:
 `Rscript openspecy_match.R out.csv derivative 5 in1.csv in2.csv`.
@@ -85,7 +85,7 @@ mypy
 
 ## Limitations
 
-- Only spectral intensities and wavenumbers are exported. Metadata such as the laser wavelength, map coordinates and the white-light image is not written to the CSV. Map positions are available through `WDFReader.xpos/ypos` if you need them.
-- Map support covers splitting into per-spectrum CSVs and wide CSV. It was tested with synthetic data only, because no map `.wdf` sample was available.
-- Phase 2 targets OpenSpecy ≥ 1.0. It has not been run end-to-end in CI or on the author's machine because R was not installed there. The OpenSpecy API changed between 0.x and 1.x, so check `packageVersion("OpenSpecy")` if it fails.
-- File parsing depends on renishawWiRE. Very new or unusual WiRE file versions may not be supported.
+- Only spectral intensities and wavenumbers are exported. Metadata such as the laser wavelength and the white-light image is not written to the CSV. Map stage positions are written only in the wide format.
+- Map/wide output was tested with synthetic data only, because no map `.wdf` sample was available.
+- Phase 2 targets OpenSpecy 2.0.x. **It has not been run end-to-end yet**, because R was not installed on the development machine. If it fails, check `packageVersion("OpenSpecy")`.
+- File parsing depends on `renishaw-wdf`. Multitrack files export track 0 only.

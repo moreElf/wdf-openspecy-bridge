@@ -24,9 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="'standard' = wavenumber,intensity (default); 'hash' = #Wave,#Intensity",
     )
     p.add_argument(
-        "--wide",
+        "--split",
         action="store_true",
-        help="write multi-spectrum files as one wide CSV instead of one CSV per spectrum",
+        help="write multi-spectrum files as one long CSV per spectrum instead of one OpenSpecy wide CSV",
     )
     p.add_argument(
         "--match",
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     failures = 0
     for wdf in inputs:
         try:
-            outs = convert_file(wdf, args.out_dir, args.header, args.wide)
+            outs = convert_file(wdf, args.out_dir, args.header, args.split)
         except Exception as e:  # report and continue with remaining files
             failures += 1
             print(f"FAIL {wdf}: {e}", file=sys.stderr)
@@ -58,9 +58,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"OK   {wdf} -> {len(outs)} CSV ({outs[0].name}{' ...' if len(outs) > 1 else ''})")
 
     if args.match and written:
-        if args.wide:
-            print("--match is not supported with --wide", file=sys.stderr)
-            return 1
         out_csv = Path(args.out_dir or written[0].parent) / "openspecy_matches.csv"
         try:
             run_match(written, out_csv, args.library, args.top_n)

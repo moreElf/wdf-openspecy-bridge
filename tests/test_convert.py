@@ -61,15 +61,29 @@ def test_multi_spectrum_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     fake = convert.WdfData(
         source=tmp_path / "map.wdf",
         title="map",
-        measurement_type="Mapping",
-        wavenumber=np.array([100.0, 200.0, 300.0]),
+        wavenumber=np.array([100.2, 200.0, 300.0]),
         intensities=np.arange(6, dtype=np.float64).reshape(2, 3),
+        x=np.array([0.0, 5.0]),
+        y=np.array([1.0, 1.0]),
     )
     monkeypatch.setattr(convert, "read_wdf", lambda _p: fake)
 
-    outs = convert.convert_file(fake.source, tmp_path / "split")
-    assert [p.name for p in outs] == ["map_0001.csv", "map_0002.csv"]
-    assert read_rows(outs[1])[1:] == [["100.0000", "3"], ["200.0000", "4"], ["300.0000", "5"]]
+    (wide,) = convert.convert_file(fake.source, tmp_path / "wide")
+    assert wide.name == "map.csv"
+    assert read_rows(wide) == [
+        ["100", "200", "300", "x", "y", "file_name"],
+        ["0", "1", "2", "0.0000", "1.0000", "map.wdf"],
+        ["3", "4", "5", "5.0000", "1.0000", "map.wdf"],
+    ]
 
-    (wide,) = convert.convert_file(fake.source, tmp_path / "wide", wide=True)
-    assert read_rows(wide)[0] == ["wavenumber", "intensity_0001", "intensity_0002"]
+    outs = convert.convert_file(fake.source, tmp_path / "split", split=True)
+    assert [p.name for p in outs] == ["map_0001.csv", "map_0002.csv"]
+    assert read_rows(outs[1])[1:] == [["100.2000", "3"], ["200.0000", "4"], ["300.0000", "5"]]
+
+
+def test_wavenumber_labels_fall_back_to_decimals() -> None:
+    import numpy as np
+
+    from wdf_openspecy_bridge.convert import wavenumber_labels
+
+    assert wavenumber_labels(np.array([100.1, 100.4, 101.0])) == ["100.1000", "100.4000", "101.0000"]
