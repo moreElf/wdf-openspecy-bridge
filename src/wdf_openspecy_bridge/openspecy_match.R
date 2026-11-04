@@ -45,9 +45,11 @@ results <- lapply(inputs, function(f) {
   hits <- match_spec(x, library = lib, na.rm = TRUE, conform = TRUE, top_n = top_n,
                      add_library_metadata = "sample_name")
   hits <- as.data.frame(hits)
-  hits <- hits[order(hits$object_id, -hits$match_val), , drop = FALSE]
-  hits$input_file <- basename(f)
   group <- if ("object_id" %in% names(hits)) hits$object_id else rep(1, nrow(hits))
+  ord <- order(group, -hits$match_val)
+  hits <- hits[ord, , drop = FALSE]
+  group <- group[ord]
+  hits$input_file <- basename(f)
   hits$rank <- ave(seq_len(nrow(hits)), group, FUN = seq_along)
   hits
 })
