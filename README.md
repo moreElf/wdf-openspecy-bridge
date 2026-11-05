@@ -59,18 +59,33 @@ Add `.wdf` files, optionally choose an output folder, pick a header style, and p
 3. Run:
 
 ```bash
-wdf2csv data_folder/ -o out/ --match             # top 5 matches, "derivative" library
-wdf2csv sample.wdf --match --library nobaseline --top-n 10
+wdf2csv data_folder/ -o out/ --match                          # openspecy.org defaults, top 5
+wdf2csv sample.wdf --match --spectrum-type raman              # Raman references only
+wdf2csv sample.wdf --match --lib-type full --top-n 10         # full library instead of medoids
+wdf2csv sample.wdf --match --preset legacy                    # pipeline used before v0.2
 ```
 
-The first run downloads the OpenSpecy reference library through `get_lib()` (`derivative` is about 46 MB). It is cached inside the R package folder. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, spectrum_identity, material_class, …`. The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected.
+The first run downloads the selected OpenSpecy reference library through `get_lib()` (`medoid_derivative` is about 5 MB; the full `derivative` library is about 46 MB). It is cached inside the R package folder. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, material_class, spectrum_identity, spectrum_type, organization, …`. Each spectrum gets its own top N, sorted by `match_val` (Pearson correlation). The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected, and it always uses the web preset.
 
-Only the Raman part of the library is used (`lib$raman` in OpenSpecy 2.x, `filter_spec` for older combined libraries). Each spectrum gets its own top N, sorted by `match_val` (Pearson correlation). Processing follows the OpenSpecy defaults for each library, and `match_spec(conform = TRUE)` then aligns each spectrum to the library axis:
-- `derivative`: Savitzky–Golay smoothing with first derivative (poly 3, window 11), then normalise.
-- `nobaseline`: baseline subtraction, then normalise.
+### Presets
+
+**`web` (default)** reproduces the defaults of openspecy.org. The settings are taken from the Shiny app source bundled in the OpenSpecy package (`inst/shiny`). The website appears to run this app: its signal-to-noise value and result summary match the bundled code.
+
+| Setting | openspecy.org default | `web` preset |
+|---|---|---|
+| Library type | Medoid | `medoid_derivative` (`--lib-type full` for the full library) |
+| Spectrum type | All (FTIR + Raman + NIR) | `all` (`--spectrum-type raman` etc.) |
+| Smoothing / derivative | polynomial 3, 1st derivative, absolute value, 90 cm⁻¹ window | same; window converted to points with `calc_window_points()` |
+| Conform wavenumbers | "Mean Up", 6 cm⁻¹ | same: if the upload is finer than 6 cm⁻¹ its axis is kept and the library is conformed onto it, otherwise the upload is resampled |
+| Baseline, intensity, range, CO₂, spike, saturation | off | off |
+| Matching | `match_spec(conform = FALSE, type = "roll")` | same |
+
+Note that "All" searches FTIR and NIR references too, as the website does. For a Raman measurement you may prefer `--spectrum-type raman`.
+
+**`legacy`** is the pipeline used before v0.2: the full Raman library, a fixed 11-point smoothing window (or baseline subtraction for `nobaseline`), and `match_spec(conform = TRUE)`. Its results can differ a lot from the website. On one test spectrum the best match changed from a mineral (marshite, 0.60) to polyethylene (0.67).
 
 The R script is `src/wdf_openspecy_bridge/openspecy_match.R`. You can also run it directly:
-`Rscript openspecy_match.R out.csv derivative 5 in1.csv in2.csv`.
+`Rscript openspecy_match.R out.csv web derivative medoid all 5 in1.csv in2.csv`.
 
 ## Development
 
@@ -88,5 +103,6 @@ mypy
 - Only spectral intensities and wavenumbers are exported. Metadata such as the laser wavelength and the white-light image is not written to the CSV. Map stage positions are written only in the wide format.
 - Map/wide output was tested with synthetic data built from the sample, including through OpenSpecy's `read_any` and `match_spec`. It has not been tested with a real map `.wdf`.
 - Phase 2 was verified end to end with R 4.6.2 and OpenSpecy 2.0.3 on Windows, using both the `derivative` and `nobaseline` libraries. Other OpenSpecy versions may differ, so check `packageVersion("OpenSpecy")` if it fails. The test suite runs an R end-to-end test when Rscript is found and skips it otherwise.
-- The match scores are only a screening aid. On the sample, the best `derivative` match scores about 0.42 (whewellite) and the best `nobaseline` match about 0.69 (phlogopite). These are low correlations, so check the spectra by eye before trusting an identification.
+- The match scores are only a screening aid. Check the spectra by eye before trusting an identification.
+- The web preset reproduces the website's processing, but not always its exact score. On one spectrum the website and this tool agree on the top material class (polyethylene) and on the signal-to-noise value (7.89). However, the website reports a correlation of 0.704 and this tool 0.667. The website may be running a slightly different app revision or library revision.
 - File parsing depends on `renishaw-wdf`. Multitrack files export track 0 only.

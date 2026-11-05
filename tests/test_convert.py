@@ -105,15 +105,28 @@ def test_wide_csv_of_sample_has_integer_columns(tmp_path: Path) -> None:
     assert len(set(labels)) == len(labels)
 
 
-@pytest.mark.skipif(
+needs_r = pytest.mark.skipif(
     __import__("wdf_openspecy_bridge.openspecy").openspecy.find_rscript() is None,
     reason="R / OpenSpecy not installed",
 )
-def test_openspecy_match_end_to_end(tmp_path: Path) -> None:
+
+
+def test_run_match_rejects_unknown_options(tmp_path: Path) -> None:
+    from wdf_openspecy_bridge.openspecy import run_match
+
+    with pytest.raises(ValueError, match="preset"):
+        run_match([], tmp_path / "m.csv", preset="website")
+    with pytest.raises(ValueError, match="spectrum_type"):
+        run_match([], tmp_path / "m.csv", spectrum_type="uv")
+
+
+@needs_r
+@pytest.mark.parametrize("preset", ["web", "legacy"])
+def test_openspecy_match_end_to_end(tmp_path: Path, preset: str) -> None:
     from wdf_openspecy_bridge.openspecy import run_match
 
     (spec,) = convert_file(SAMPLE, tmp_path)
-    out = run_match([spec], tmp_path / "matches.csv", top_n=3)
+    out = run_match([spec], tmp_path / "matches.csv", top_n=3, preset=preset)
     rows = read_rows(out)
     header, body = rows[0], rows[1:]
     assert len(body) == 3
@@ -121,3 +134,8 @@ def test_openspecy_match_end_to_end(tmp_path: Path) -> None:
     score = [float(r[header.index("match_val")]) for r in body]
     assert [r[rank] for r in body] == ["1", "2", "3"]
     assert score == sorted(score, reverse=True)
+    assert "material_class" in header
+    types = {r[header.index("spectrum_type")] for r in body}
+    # legacy searches Raman only; the web preset searches every technique like openspecy.org
+    if preset == "legacy":
+        assert types == {"raman"}
