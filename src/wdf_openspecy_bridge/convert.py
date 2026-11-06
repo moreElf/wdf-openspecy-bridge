@@ -101,6 +101,22 @@ def write_wide_csv(out_path: Path, data: WdfData) -> None:
             w.writerow([*(f"{v:.6g}" for v in row), px, py, data.source.name])
 
 
+def output_base(wdf_path: str | Path, out_dir: str | Path | None = None) -> Path:
+    """The ``<dest>/<stem>.csv`` every output of this input is named from (``--split`` adds ``_0001``...)."""
+    wdf_path = Path(wdf_path)
+    dest = Path(out_dir) if out_dir is not None else wdf_path.parent
+    return dest / f"{wdf_path.stem}.csv"
+
+
+def output_key(wdf_path: str | Path, out_dir: str | Path | None = None) -> str:
+    """Identity of an input's outputs, case-folded because Windows and macOS file names are case-insensitive.
+
+    Two inputs in one batch with the same key (``a/x.wdf`` and ``b/x.wdf`` into one ``-o``
+    folder) would overwrite each other.
+    """
+    return str(output_base(wdf_path, out_dir).resolve()).casefold()
+
+
 def convert_file(
     wdf_path: str | Path,
     out_dir: str | Path | None = None,
@@ -114,8 +130,8 @@ def convert_file(
     one long-format ``<stem>_0001.csv`` ... per spectrum.
     """
     data = read_wdf(wdf_path)
-    dest = Path(out_dir) if out_dir is not None else data.source.parent
-    stem = data.source.stem
+    base = output_base(wdf_path, out_dir)
+    dest, stem = base.parent, base.stem
     n = data.intensities.shape[0]
 
     if n == 1:

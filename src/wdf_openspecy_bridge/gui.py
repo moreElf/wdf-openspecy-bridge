@@ -7,7 +7,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, scrolledtext, ttk
 
-from .convert import convert_file
+from .convert import convert_file, output_key
 from .openspecy import find_rscript, run_match
 
 
@@ -85,7 +85,13 @@ class App(tk.Tk):
     def _work(self) -> None:
         out_dir = self.out_dir.get() or None
         written: list[Path] = []
+        claimed: dict[str, Path] = {}
         for f in self.files:
+            key = output_key(f, out_dir)
+            if key in claimed:
+                self.write(f"FAIL {f.name}: output name clashes with {claimed[key]}; convert it separately")
+                continue
+            claimed[key] = f
             try:
                 outs = convert_file(f, out_dir, self.header.get())  # type: ignore[arg-type]
                 written.extend(outs)
@@ -93,11 +99,10 @@ class App(tk.Tk):
             except Exception as e:
                 self.write(f"FAIL {f.name}: {e}")
         if self.do_match.get() and written:
-            out_csv = Path(out_dir or written[0].parent) / "openspecy_matches.csv"
             self.write("Running OpenSpecy match (first run downloads the library)…")
             try:
-                run_match(written, out_csv)
-                self.write(f"OK   matches -> {out_csv}")
+                for csv_file, result in zip(written, run_match(written), strict=True):
+                    self.write(f"OK   {csv_file.name} matches -> {result.name}")
             except RuntimeError as e:
                 self.write(str(e))
         self.write("done")
