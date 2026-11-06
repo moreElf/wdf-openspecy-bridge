@@ -84,14 +84,14 @@ The console log also shows the top 3 matches of each spectrum, whatever `--top-n
 ```text
 $ wdf2csv tests/fixtures/1013-lens5x-fit-pinhole-01.wdf -o out --match --spectrum-type raman
 OK   1013-lens5x-fit-pinhole-01.csv matches -> out/1013-lens5x-fit-pinhole-01-OpenSpecy.csv
-  1. (03) pp                                   51.1%  (polypropylene, raman)
-  2. polyethylene_oxide_higher_weight_aldrich  50.1%  (polyethers, raman)
-  3. polyethylene_glycol_6000_bdh              50.1%  (polyethers, raman)
+  1. Polypropylene  51.1%  (raman, ref: (03) pp)
+  2. Polyethers     50.1%  (raman, ref: polyethylene_oxide_higher_weight_aldrich)
+  3. Polyethers     50.1%  (raman, ref: polyethylene_glycol_6000_bdh)
 ```
 
-Names are printed exactly as the library stores them.
-
-- Each line shows the rank, the material name (`spectrum_identity`, or `material_class` when that is empty), and the score. In brackets come the material class and the reference's spectrum type.
+- Each line shows the rank, the material name and the score.
+- The material name is the library's material class (`material_class`), with its first letter capitalised. If the class is empty, the reference spectrum's own name (`spectrum_identity`) is used instead.
+- In brackets come the reference's spectrum type and its own name, as the library stores it.
 - The score is `match_val`, the Pearson correlation, written as a percentage with one decimal: 0.768 becomes `76.8%`. A missing score is shown as `n/a`.
 - A wide map CSV with several spectra gets a `spectrum <object_id>:` heading followed by that spectrum's top 3.
 

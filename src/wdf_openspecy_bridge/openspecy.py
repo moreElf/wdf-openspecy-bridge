@@ -52,12 +52,18 @@ def format_score(match_val: str) -> str:
         return "n/a"
 
 
+def capitalize(name: str) -> str:
+    """Upper-case only the first letter, so ``polyolefins (polyalkenes)`` keeps the rest as is."""
+    return name[:1].upper() + name[1:]
+
+
 def summarize_result(result: Path, n: int = LOG_TOP_N) -> list[str]:
     """Log lines with the top ``n`` matches of each spectrum in a result file.
 
-    One line per match: ``rank. name  score  (material_class, spectrum_type)``. The name is
-    the library's ``spectrum_identity`` (``material_class`` when that is empty). A file with
-    several spectra (a wide map CSV) gets a ``spectrum <object_id>:`` heading per spectrum.
+    One line per match: ``rank. Name  score  (spectrum_type, ref: spectrum_identity)``. The
+    name is the library's ``material_class`` (``spectrum_identity`` when that is empty) with
+    its first letter capitalised. A file with several spectra (a wide map CSV) gets a
+    ``spectrum <object_id>:`` heading per spectrum.
     """
     with result.open(encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
@@ -73,10 +79,11 @@ def summarize_result(result: Path, n: int = LOG_TOP_N) -> list[str]:
             lines.append(f"  spectrum {object_id}:")
             indent = "    "
         top = sorted(hits, key=lambda r: int(r["rank"]))[:n]
-        names = [r.get("spectrum_identity") or r.get("material_class") or "?" for r in top]
+        names = [capitalize(r.get("material_class") or r.get("spectrum_identity") or "?") for r in top]
         width = max(len(name) for name in names)
         for row, name in zip(top, names, strict=True):
-            detail = ", ".join(v for v in (row.get("material_class"), row.get("spectrum_type")) if v)
+            ref = row.get("spectrum_identity")
+            detail = ", ".join(v for v in (row.get("spectrum_type"), ref and f"ref: {ref}") if v)
             score = format_score(row["match_val"])
             lines.append(
                 f"{indent}{row['rank']}. {name:<{width}} {score:>6}" + (f"  ({detail})" if detail else "")

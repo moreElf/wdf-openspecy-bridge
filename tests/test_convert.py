@@ -131,16 +131,17 @@ def test_summarize_result_lists_top_three(tmp_path: Path) -> None:
     result = write_result(
         tmp_path / "a-OpenSpecy.csv",
         [
-            ["a.csv", "intensity", "2", "0.70", "polyolefins", "polypropylene", "raman"],
-            ["a.csv", "intensity", "1", "0.768", "polyolefins", "polyethylene", "raman"],
-            ["a.csv", "intensity", "3", "0.5", "mineral", "", "raman"],
-            ["a.csv", "intensity", "4", "0.4", "mineral", "calcite", "raman"],
+            ["a.csv", "intensity", "2", "0.70", "polyolefins (polyalkenes)", "(03) pp", "raman"],
+            ["a.csv", "intensity", "1", "0.768", "polyethylene", "pe_film", "raman"],
+            ["a.csv", "intensity", "3", "0.5", "", "calcite", "raman"],
+            ["a.csv", "intensity", "4", "0.4", "mineral", "quartz", "raman"],
         ],
     )
+    # Sorted by rank, cut at 3, class name capitalised (falling back to the reference name).
     assert summarize_result(result) == [
-        "  1. polyethylene   76.8%  (polyolefins, raman)",
-        "  2. polypropylene  70.0%  (polyolefins, raman)",
-        "  3. mineral        50.0%  (mineral, raman)",
+        "  1. Polyethylene               76.8%  (raman, ref: pe_film)",
+        "  2. Polyolefins (polyalkenes)  70.0%  (raman, ref: (03) pp)",
+        "  3. Calcite                    50.0%  (raman, ref: calcite)",
     ]
 
 
@@ -154,7 +155,7 @@ def test_summarize_result_groups_spectra_of_a_map(tmp_path: Path) -> None:
     ]
     lines = summarize_result(write_result(tmp_path / "m-OpenSpecy.csv", rows))
     assert lines[0] == "  spectrum p1:" and lines[4] == "  spectrum p2:"
-    assert lines[1] == "    1. p1-1  50.0%  (c, raman)"
+    assert lines[1] == "    1. C  50.0%  (raman, ref: p1-1)"
     assert len(lines) == 8
 
 
@@ -170,7 +171,7 @@ def test_cli_logs_top_matches(
 
     monkeypatch.setattr(cli, "run_match", fake_match)
     assert main([str(SAMPLE), "-o", str(tmp_path), "--match"]) == 0
-    assert "  1. polyethylene  76.8%  (polyolefins, raman)" in capsys.readouterr().out.splitlines()
+    assert "  1. Polyolefins  76.8%  (raman, ref: polyethylene)" in capsys.readouterr().out.splitlines()
 
 
 def test_integer_axis_resamples_dense_spectra() -> None:
