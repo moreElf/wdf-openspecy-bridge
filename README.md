@@ -79,7 +79,23 @@ Each converted CSV gets its own result file, named after it and written next to 
 
 A batch of several files produces one result file per CSV. The reference library is still loaded only once. Re-running an input replaces only its own result file.
 
-The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected. It always uses the web preset and names its results the same way.
+The console log also shows the top 3 matches of each spectrum, whatever `--top-n` is set to; the result file still holds all N:
+
+```text
+$ wdf2csv tests/fixtures/1013-lens5x-fit-pinhole-01.wdf -o out --match --spectrum-type raman
+OK   1013-lens5x-fit-pinhole-01.csv matches -> out/1013-lens5x-fit-pinhole-01-OpenSpecy.csv
+  1. Polypropylene  51.1%  (raman, ref: (03) pp)
+  2. Polyethers     50.1%  (raman, ref: polyethylene_oxide_higher_weight_aldrich)
+  3. Polyethers     50.1%  (raman, ref: polyethylene_glycol_6000_bdh)
+```
+
+- Each line shows the rank, the material name and the score.
+- The material name is the library's material class (`material_class`), with its first letter capitalised. If the class is empty, the reference spectrum's own name (`spectrum_identity`) is used instead.
+- In brackets come the reference's spectrum type and its own name, as the library stores it.
+- The score is `match_val`, the Pearson correlation, written as a percentage with one decimal: 0.768 becomes `76.8%`. A missing score is shown as `n/a`.
+- A wide map CSV with several spectra gets a `spectrum <object_id>:` heading followed by that spectrum's top 3.
+
+The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected. It always uses the web preset and names its results the same way. Its log window shows the same top 3 lines.
 
 ### Presets
 

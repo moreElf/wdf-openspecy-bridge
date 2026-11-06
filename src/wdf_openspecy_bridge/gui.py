@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, scrolledtext, ttk
 
 from .convert import convert_file, output_key
-from .openspecy import find_rscript, run_match
+from .openspecy import find_rscript, run_match, summarize_result
 
 
 class App(tk.Tk):
@@ -103,6 +103,8 @@ class App(tk.Tk):
             try:
                 for csv_file, result in zip(written, run_match(written), strict=True):
                     self.write(f"OK   {csv_file.name} matches -> {result.name}")
+                    for line in summarize_result(result):
+                        self.write(line)
             except RuntimeError as e:
                 self.write(str(e))
         self.write("done")
