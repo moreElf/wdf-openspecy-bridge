@@ -99,6 +99,80 @@ def test_result_path_is_named_after_input() -> None:
     assert result_path(Path("out") / "16GF-A-01.csv") == Path("out") / "16GF-A-01-OpenSpecy.csv"
 
 
+RESULT_HEADER = [
+    "input_file",
+    "object_id",
+    "rank",
+    "match_val",
+    "material_class",
+    "spectrum_identity",
+    "spectrum_type",
+]
+
+
+def write_result(path: Path, rows: list[list[str]]) -> Path:
+    with path.open("w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerows([RESULT_HEADER, *rows])
+    return path
+
+
+def test_format_score_is_percent_with_one_decimal() -> None:
+    from wdf_openspecy_bridge.openspecy import format_score
+
+    assert format_score("0.768") == "76.8%"
+    assert format_score("0.626436622821646") == "62.6%"
+    assert format_score("1") == "100.0%"
+    assert format_score("NA") == "n/a"
+
+
+def test_summarize_result_lists_top_three(tmp_path: Path) -> None:
+    from wdf_openspecy_bridge.openspecy import summarize_result
+
+    result = write_result(
+        tmp_path / "a-OpenSpecy.csv",
+        [
+            ["a.csv", "intensity", "2", "0.70", "polyolefins", "polypropylene", "raman"],
+            ["a.csv", "intensity", "1", "0.768", "polyolefins", "polyethylene", "raman"],
+            ["a.csv", "intensity", "3", "0.5", "mineral", "", "raman"],
+            ["a.csv", "intensity", "4", "0.4", "mineral", "calcite", "raman"],
+        ],
+    )
+    assert summarize_result(result) == [
+        "  1. polyethylene   76.8%  (polyolefins, raman)",
+        "  2. polypropylene  70.0%  (polyolefins, raman)",
+        "  3. mineral        50.0%  (mineral, raman)",
+    ]
+
+
+def test_summarize_result_groups_spectra_of_a_map(tmp_path: Path) -> None:
+    from wdf_openspecy_bridge.openspecy import summarize_result
+
+    rows = [
+        ["m.csv", oid, str(r), "0.5", "c", f"{oid}-{r}", "raman"]
+        for oid in ("p1", "p2")
+        for r in (1, 2, 3, 4)
+    ]
+    lines = summarize_result(write_result(tmp_path / "m-OpenSpecy.csv", rows))
+    assert lines[0] == "  spectrum p1:" and lines[4] == "  spectrum p2:"
+    assert lines[1] == "    1. p1-1  50.0%  (c, raman)"
+    assert len(lines) == 8
+
+
+def test_cli_logs_top_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from wdf_openspecy_bridge import cli
+    from wdf_openspecy_bridge.openspecy import result_path
+
+    def fake_match(csv_files: list[Path], *_a: object, **_k: object) -> list[Path]:
+        rows = [["x", "intensity", "1", "0.768", "polyolefins", "polyethylene", "raman"]]
+        return [write_result(result_path(f), rows) for f in csv_files]
+
+    monkeypatch.setattr(cli, "run_match", fake_match)
+    assert main([str(SAMPLE), "-o", str(tmp_path), "--match"]) == 0
+    assert "  1. polyethylene  76.8%  (polyolefins, raman)" in capsys.readouterr().out.splitlines()
+
+
 def test_integer_axis_resamples_dense_spectra() -> None:
     import numpy as np
 
@@ -163,3 +237,8 @@ def test_openspecy_match_end_to_end(tmp_path: Path, preset: str) -> None:
     # legacy searches Raman only; the web preset searches every technique like openspecy.org
     if preset == "legacy":
         assert types == {"raman"}
+    from wdf_openspecy_bridge.openspecy import summarize_result
+
+    lines = summarize_result(outs[0])
+    assert [line.split(".")[0].strip() for line in lines] == ["1", "2", "3"]
+    assert f"{score[0] * 100:.1f}%" in lines[0]

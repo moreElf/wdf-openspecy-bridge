@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import os
 import shutil
 import subprocess
@@ -38,6 +39,49 @@ RESULT_SUFFIX = "-OpenSpecy"
 def result_path(csv_file: Path) -> Path:
     """Where the matches for one input CSV go: ``<stem>-OpenSpecy.csv`` next to it."""
     return csv_file.with_name(f"{csv_file.stem}{RESULT_SUFFIX}.csv")
+
+
+LOG_TOP_N = 3
+
+
+def format_score(match_val: str) -> str:
+    """Pearson correlation as a percentage with one decimal: ``0.768`` -> ``76.8%``."""
+    try:
+        return f"{float(match_val) * 100:.1f}%"
+    except ValueError:  # R writes NA when no score could be computed
+        return "n/a"
+
+
+def summarize_result(result: Path, n: int = LOG_TOP_N) -> list[str]:
+    """Log lines with the top ``n`` matches of each spectrum in a result file.
+
+    One line per match: ``rank. name  score  (material_class, spectrum_type)``. The name is
+    the library's ``spectrum_identity`` (``material_class`` when that is empty). A file with
+    several spectra (a wide map CSV) gets a ``spectrum <object_id>:`` heading per spectrum.
+    """
+    with result.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    groups: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        groups.setdefault(row.get("object_id", ""), []).append(row)
+    if not groups:
+        return ["  (no matches)"]
+    lines: list[str] = []
+    for object_id, hits in groups.items():
+        indent = "  "
+        if len(groups) > 1:
+            lines.append(f"  spectrum {object_id}:")
+            indent = "    "
+        top = sorted(hits, key=lambda r: int(r["rank"]))[:n]
+        names = [r.get("spectrum_identity") or r.get("material_class") or "?" for r in top]
+        width = max(len(name) for name in names)
+        for row, name in zip(top, names, strict=True):
+            detail = ", ".join(v for v in (row.get("material_class"), row.get("spectrum_type")) if v)
+            score = format_score(row["match_val"])
+            lines.append(
+                f"{indent}{row['rank']}. {name:<{width}} {score:>6}" + (f"  ({detail})" if detail else "")
+            )
+    return lines
 
 
 def run_match(

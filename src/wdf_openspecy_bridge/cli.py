@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .convert import collect_inputs, convert_file, output_key
-from .openspecy import LIB_TYPES, PRESETS, SPECTRUM_TYPES, TRANSFORMATIONS, run_match
+from .openspecy import LIB_TYPES, PRESETS, SPECTRUM_TYPES, TRANSFORMATIONS, run_match, summarize_result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -106,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         for csv_file, result in zip(written, results, strict=True):
             print(f"OK   {csv_file.name} matches -> {result}")
+            for line in summarize_result(result):
+                print(line)
 
     print(f"done: {len(inputs) - failures}/{len(inputs)} files converted")
     return 1 if failures else 0
