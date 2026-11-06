@@ -27,23 +27,54 @@ def find_rscript() -> str | None:
     return None
 
 
+PRESETS = ("web", "legacy")
+TRANSFORMATIONS = ("derivative", "nobaseline")
+LIB_TYPES = ("medoid", "full")
+SPECTRUM_TYPES = ("all", "raman", "ftir", "nir")
+
+
 def run_match(
     csv_files: list[Path],
     out_csv: Path,
     library: str = "derivative",
     top_n: int = 5,
+    preset: str = "web",
+    lib_type: str = "medoid",
+    spectrum_type: str = "all",
 ) -> Path:
     """Match CSV spectra against an OpenSpecy library and write top hits to out_csv.
 
+    ``preset="web"`` reproduces the openspecy.org defaults; ``"legacy"`` is the
+    pre-0.2 pipeline (full Raman library). ``lib_type`` and ``spectrum_type``
+    only apply to the web preset.
+
     Raises RuntimeError if Rscript is not available or the R script fails.
     """
+    for name, value, allowed in (
+        ("preset", preset, PRESETS),
+        ("library", library, TRANSFORMATIONS),
+        ("lib_type", lib_type, LIB_TYPES),
+        ("spectrum_type", spectrum_type, SPECTRUM_TYPES),
+    ):
+        if value not in allowed:
+            raise ValueError(f"{name} must be one of {allowed}, got {value!r}")
     rscript = find_rscript()
     if rscript is None:
         raise RuntimeError(
             "Rscript not found. Install R and the OpenSpecy package to enable matching (see README, Phase 2)."
         )
     out_csv.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [rscript, str(R_SCRIPT), str(out_csv), library, str(top_n), *map(str, csv_files)]
+    cmd = [
+        rscript,
+        str(R_SCRIPT),
+        str(out_csv),
+        preset,
+        library,
+        lib_type,
+        spectrum_type,
+        str(top_n),
+        *map(str, csv_files),
+    ]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0:
         raise RuntimeError(f"OpenSpecy match failed:\n{proc.stderr.strip()}")

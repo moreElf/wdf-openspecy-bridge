@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .convert import collect_inputs, convert_file
-from .openspecy import run_match
+from .openspecy import LIB_TYPES, PRESETS, SPECTRUM_TYPES, TRANSFORMATIONS, run_match
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,7 +33,30 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="(Phase 2, needs R + OpenSpecy) identify spectra and write openspecy_matches.csv",
     )
-    p.add_argument("--library", default="derivative", help="OpenSpecy library (default: derivative)")
+    p.add_argument(
+        "--preset",
+        choices=PRESETS,
+        default="web",
+        help="'web' = openspecy.org defaults (default); 'legacy' = pre-0.2 full Raman-library pipeline",
+    )
+    p.add_argument(
+        "--library",
+        choices=TRANSFORMATIONS,
+        default="derivative",
+        help="library transformation (default: derivative)",
+    )
+    p.add_argument(
+        "--lib-type",
+        choices=LIB_TYPES,
+        default="medoid",
+        help="web preset: medoid (default, as openspecy.org) or full library",
+    )
+    p.add_argument(
+        "--spectrum-type",
+        choices=SPECTRUM_TYPES,
+        default="all",
+        help="web preset: reference spectrum types to search (default: all, as openspecy.org)",
+    )
     p.add_argument("--top-n", type=int, default=5, help="number of matches per spectrum")
     return p
 
@@ -60,7 +83,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.match and written:
         out_csv = Path(args.out_dir or written[0].parent) / "openspecy_matches.csv"
         try:
-            run_match(written, out_csv, args.library, args.top_n)
+            run_match(
+                written,
+                out_csv,
+                args.library,
+                args.top_n,
+                preset=args.preset,
+                lib_type=args.lib_type,
+                spectrum_type=args.spectrum_type,
+            )
         except RuntimeError as e:
             print(f"MATCH FAIL: {e}", file=sys.stderr)
             return 1
