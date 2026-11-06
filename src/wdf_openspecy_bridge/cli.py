@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .convert import collect_inputs, convert_file
+from .convert import collect_inputs, convert_file, output_key
 from .openspecy import LIB_TYPES, PRESETS, SPECTRUM_TYPES, TRANSFORMATIONS, run_match
 
 
@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--match",
         action="store_true",
-        help="(Phase 2, needs R + OpenSpecy) identify spectra and write openspecy_matches.csv",
+        help="(Phase 2, needs R + OpenSpecy) identify spectra; writes <name>-OpenSpecy.csv next to each CSV",
     )
     p.add_argument(
         "--preset",
@@ -69,8 +69,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     written: list[Path] = []
+    claimed: dict[str, Path] = {}  # output_key -> input that owns it
     failures = 0
     for wdf in inputs:
+        key = output_key(wdf, args.out_dir)
+        if key in claimed:
+            # Same file name from two folders into one output folder: don't overwrite the first.
+            failures += 1
+            print(
+                f"FAIL {wdf}: output name clashes with {claimed[key]}; convert it separately or rename it",
+                file=sys.stderr,
+            )
+            continue
+        claimed[key] = wdf
         try:
             outs = convert_file(wdf, args.out_dir, args.header, args.split)
         except Exception as e:  # report and continue with remaining files
@@ -81,11 +92,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"OK   {wdf} -> {len(outs)} CSV ({outs[0].name}{' ...' if len(outs) > 1 else ''})")
 
     if args.match and written:
-        out_csv = Path(args.out_dir or written[0].parent) / "openspecy_matches.csv"
         try:
-            run_match(
+            results = run_match(
                 written,
-                out_csv,
                 args.library,
                 args.top_n,
                 preset=args.preset,
@@ -95,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         except RuntimeError as e:
             print(f"MATCH FAIL: {e}", file=sys.stderr)
             return 1
-        print(f"OK   matches -> {out_csv}")
+        for csv_file, result in zip(written, results, strict=True):
+            print(f"OK   {csv_file.name} matches -> {result}")
 
     print(f"done: {len(inputs) - failures}/{len(inputs)} files converted")
     return 1 if failures else 0

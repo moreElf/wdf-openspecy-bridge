@@ -1,7 +1,10 @@
 # Batch identification with the OpenSpecy R package (tested: CRAN 2.0.3).
 #
 # Usage:
-#   Rscript openspecy_match.R <out.csv> <preset> <transformation> <lib_type> <spectrum_type> <top_n> <in.csv> ...
+#   Rscript openspecy_match.R <preset> <transformation> <lib_type> <spectrum_type> <top_n> \
+#     <in1.csv> <out1.csv> [<in2.csv> <out2.csv> ...]
+#
+#   Each input gets its own result file; the library is loaded once for the batch.
 #
 #   preset:         "web"    - reproduce openspecy.org defaults (the Shiny app bundled in OpenSpecy,
 #                              inst/shiny): medoid library, 90 cm-1 Savitzky-Golay window, "Mean Up"
@@ -15,17 +18,18 @@
 suppressPackageStartupMessages(library(OpenSpecy))
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 7) {
-  stop("usage: openspecy_match.R <out.csv> <preset> <transformation> <lib_type> ",
-       "<spectrum_type> <top_n> <in.csv> ...")
+files <- args[-(1:5)]
+if (length(args) < 7 || length(files) %% 2 != 0) {
+  stop("usage: openspecy_match.R <preset> <transformation> <lib_type> <spectrum_type> <top_n> ",
+       "<in1.csv> <out1.csv> [<in2.csv> <out2.csv> ...]")
 }
-out_csv <- args[[1]]
-preset <- match.arg(args[[2]], c("web", "legacy"))
-transformation <- match.arg(args[[3]], c("derivative", "nobaseline"))
-lib_type <- match.arg(args[[4]], c("medoid", "full"))
-spectrum_type <- match.arg(args[[5]], c("all", "raman", "ftir", "nir"))
-top_n <- as.integer(args[[6]])
-inputs <- args[-(1:6)]
+preset <- match.arg(args[[1]], c("web", "legacy"))
+transformation <- match.arg(args[[2]], c("derivative", "nobaseline"))
+lib_type <- match.arg(args[[3]], c("medoid", "full"))
+spectrum_type <- match.arg(args[[4]], c("all", "raman", "ftir", "nir"))
+top_n <- as.integer(args[[5]])
+inputs <- files[c(TRUE, FALSE)]
+outputs <- files[c(FALSE, TRUE)]
 
 if (preset == "legacy") {
   lib_type <- "full"
@@ -103,7 +107,8 @@ match_legacy <- function(x) {
              add_library_metadata = "sample_name")
 }
 
-results <- lapply(inputs, function(f) {
+for (i in seq_along(inputs)) {
+  f <- inputs[[i]]
   x <- read_any(f)
   hits <- as.data.frame(if (preset == "web") match_web(x) else match_legacy(x))
   group <- if ("object_id" %in% names(hits)) hits$object_id else rep(1, nrow(hits))
@@ -112,21 +117,14 @@ results <- lapply(inputs, function(f) {
   group <- group[ord]
   hits$input_file <- basename(f)
   hits$rank <- ave(seq_len(nrow(hits)), group, FUN = seq_along)
-  hits
-})
 
-all_cols <- unique(unlist(lapply(results, names)))
-results <- lapply(results, function(d) {
-  d[setdiff(all_cols, names(d))] <- NA
-  d[all_cols]
-})
-out <- do.call(rbind, results)
-front <- intersect(c("input_file", "object_id", "rank", "match_val", "material_class",
-                     "spectrum_identity", "spectrum_type", "organization", "sample_name"),
-                   names(out))
-out <- out[c(front, setdiff(names(out), front))]
-# Drop list columns that write.csv cannot serialise.
-out <- out[!vapply(out, is.list, logical(1))]
-write.csv(out, out_csv, row.names = FALSE, fileEncoding = "UTF-8")
-cat(sprintf("wrote %d rows to %s (preset=%s, library=%s, spectrum_type=%s)\n",
-            nrow(out), out_csv, preset, lib_name, spectrum_type))
+  front <- intersect(c("input_file", "object_id", "rank", "match_val", "material_class",
+                       "spectrum_identity", "spectrum_type", "organization", "sample_name"),
+                     names(hits))
+  out <- hits[c(front, setdiff(names(hits), front))]
+  # Drop list columns that write.csv cannot serialise.
+  out <- out[!vapply(out, is.list, logical(1))]
+  write.csv(out, outputs[[i]], row.names = FALSE, fileEncoding = "UTF-8")
+  cat(sprintf("wrote %d rows to %s (preset=%s, library=%s, spectrum_type=%s)\n",
+              nrow(out), outputs[[i]], preset, lib_name, spectrum_type))
+}

@@ -42,6 +42,8 @@ wavenumber,intensity
 - Rows are sorted by ascending wavenumber. WiRE stores them in descending order.
 - A single-spectrum file produces `<name>.csv`.
 - A multi-spectrum file (map or series) produces one `<name>.csv` in OpenSpecy's native wide format. Each row is a spectrum. The columns are integer wavenumbers, followed by `x,y,file_name`, where `x,y` are the stage positions (left blank if the file has none). This is the same layout that OpenSpecy's `write_spec()` produces. OpenSpecy only recognises the layout when the column names are integers. So if the point spacing is below about 1 cm⁻¹, which happens near 2000 cm⁻¹ in the sample, the spectra are linearly interpolated onto a 1 cm⁻¹ grid. Otherwise each wavenumber is simply rounded. With `--split` it writes long-format `<name>_0001.csv`, `<name>_0002.csv` and so on.
+- Every output is named after its input, so a batch never mixes files up. Running the same input again replaces its own outputs and nothing else.
+- If two inputs in one batch would write the same name, the second is reported as `FAIL` and skipped instead of overwriting the first. This happens with `a/x.wdf` and `b/x.wdf` going to one `-o` folder; letter case is ignored, as on Windows and macOS. Convert such files into separate folders.
 - The exit code is non-zero if any file fails. The remaining files are still converted.
 
 ### GUI
@@ -65,7 +67,19 @@ wdf2csv sample.wdf --match --lib-type full --top-n 10         # full library ins
 wdf2csv sample.wdf --match --preset legacy                    # pipeline used before v0.2
 ```
 
-The first run downloads the selected OpenSpecy reference library through `get_lib()` (`medoid_derivative` is about 5 MB; the full `derivative` library is about 46 MB). It is cached inside the R package folder. Results go to `out/openspecy_matches.csv`, with columns `input_file, rank, match_val, material_class, spectrum_identity, spectrum_type, organization, …`. Each spectrum gets its own top N, sorted by `match_val` (Pearson correlation). The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected, and it always uses the web preset.
+The first run downloads the selected OpenSpecy reference library through `get_lib()` (`medoid_derivative` is about 5 MB; the full `derivative` library is about 46 MB). It is cached inside the R package folder.
+
+Each converted CSV gets its own result file, named after it and written next to it, with columns `input_file, rank, match_val, material_class, spectrum_identity, spectrum_type, organization, …`. Each spectrum gets its own top N, sorted by `match_val` (Pearson correlation).
+
+| Input | Converted CSV | Result |
+|---|---|---|
+| `16GF-A-01.wdf` (one spectrum) | `16GF-A-01.csv` | `16GF-A-01-OpenSpecy.csv` |
+| `map.wdf` (many spectra) | `map.csv` (wide) | `map-OpenSpecy.csv`, all spectra together; `object_id` tells them apart |
+| `map.wdf` with `--split` | `map_0001.csv`, `map_0002.csv`, … | `map_0001-OpenSpecy.csv`, `map_0002-OpenSpecy.csv`, … |
+
+A batch of several files produces one result file per CSV. The reference library is still loaded only once. Re-running an input replaces only its own result file.
+
+The GUI shows an "Identify with OpenSpecy" checkbox, but only when R is detected. It always uses the web preset and names its results the same way.
 
 ### Presets
 
@@ -85,7 +99,7 @@ Note that "All" searches FTIR and NIR references too, as the website does. For a
 **`legacy`** is the pipeline used before v0.2: the full Raman library, a fixed 11-point smoothing window (or baseline subtraction for `nobaseline`), and `match_spec(conform = TRUE)`. Its results can differ a lot from the website. On one test spectrum the best match changed from a mineral (marshite, 0.60) to polyethylene (0.67).
 
 The R script is `src/wdf_openspecy_bridge/openspecy_match.R`. You can also run it directly:
-`Rscript openspecy_match.R out.csv web derivative medoid all 5 in1.csv in2.csv`.
+`Rscript openspecy_match.R web derivative medoid all 5 in1.csv in1-OpenSpecy.csv in2.csv in2-OpenSpecy.csv` (input and output paths in pairs).
 
 ## Development
 

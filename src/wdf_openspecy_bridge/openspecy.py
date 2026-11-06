@@ -32,17 +32,27 @@ TRANSFORMATIONS = ("derivative", "nobaseline")
 LIB_TYPES = ("medoid", "full")
 SPECTRUM_TYPES = ("all", "raman", "ftir", "nir")
 
+RESULT_SUFFIX = "-OpenSpecy"
+
+
+def result_path(csv_file: Path) -> Path:
+    """Where the matches for one input CSV go: ``<stem>-OpenSpecy.csv`` next to it."""
+    return csv_file.with_name(f"{csv_file.stem}{RESULT_SUFFIX}.csv")
+
 
 def run_match(
     csv_files: list[Path],
-    out_csv: Path,
     library: str = "derivative",
     top_n: int = 5,
     preset: str = "web",
     lib_type: str = "medoid",
     spectrum_type: str = "all",
-) -> Path:
-    """Match CSV spectra against an OpenSpecy library and write top hits to out_csv.
+) -> list[Path]:
+    """Match CSV spectra against an OpenSpecy library, one result file per input.
+
+    Each input ``<stem>.csv`` gets ``<stem>-OpenSpecy.csv`` in the same folder (see
+    ``result_path``); a wide CSV with many spectra gets one file holding all of them.
+    The library is loaded once for the whole batch. Returns the result paths, in input order.
 
     ``preset="web"`` reproduces the openspecy.org defaults; ``"legacy"`` is the
     pre-0.2 pipeline (full Raman library). ``lib_type`` and ``spectrum_type``
@@ -63,19 +73,10 @@ def run_match(
         raise RuntimeError(
             "Rscript not found. Install R and the OpenSpecy package to enable matching (see README, Phase 2)."
         )
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        rscript,
-        str(R_SCRIPT),
-        str(out_csv),
-        preset,
-        library,
-        lib_type,
-        spectrum_type,
-        str(top_n),
-        *map(str, csv_files),
-    ]
+    outs = [result_path(Path(f)) for f in csv_files]
+    pairs = [str(p) for f, out in zip(csv_files, outs, strict=True) for p in (f, out)]
+    cmd = [rscript, str(R_SCRIPT), preset, library, lib_type, spectrum_type, str(top_n), *pairs]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if proc.returncode != 0:
         raise RuntimeError(f"OpenSpecy match failed:\n{proc.stderr.strip()}")
-    return out_csv
+    return outs

@@ -81,6 +81,24 @@ def test_multi_spectrum_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     assert read_rows(outs[1])[1:] == [["100.2000", "3"], ["200.0000", "4"], ["300.0000", "5"]]
 
 
+def test_cli_refuses_clashing_output_names(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # The same file name from two folders into one output folder must not overwrite.
+    for d in ("a", "b"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "same.wdf").write_bytes(SAMPLE.read_bytes())
+    out = tmp_path / "out"
+    assert main([str(tmp_path / "a" / "same.wdf"), str(tmp_path / "b" / "same.wdf"), "-o", str(out)]) == 1
+    assert [p.name for p in out.iterdir()] == ["same.csv"]
+    err = capsys.readouterr().err
+    assert "clashes with" in err and str(tmp_path / "a" / "same.wdf") in err
+
+
+def test_result_path_is_named_after_input() -> None:
+    from wdf_openspecy_bridge.openspecy import result_path
+
+    assert result_path(Path("out") / "16GF-A-01.csv") == Path("out") / "16GF-A-01-OpenSpecy.csv"
+
+
 def test_integer_axis_resamples_dense_spectra() -> None:
     import numpy as np
 
@@ -111,13 +129,13 @@ needs_r = pytest.mark.skipif(
 )
 
 
-def test_run_match_rejects_unknown_options(tmp_path: Path) -> None:
+def test_run_match_rejects_unknown_options() -> None:
     from wdf_openspecy_bridge.openspecy import run_match
 
     with pytest.raises(ValueError, match="preset"):
-        run_match([], tmp_path / "m.csv", preset="website")
+        run_match([], preset="website")
     with pytest.raises(ValueError, match="spectrum_type"):
-        run_match([], tmp_path / "m.csv", spectrum_type="uv")
+        run_match([], spectrum_type="uv")
 
 
 @needs_r
@@ -126,10 +144,16 @@ def test_openspecy_match_end_to_end(tmp_path: Path, preset: str) -> None:
     from wdf_openspecy_bridge.openspecy import run_match
 
     (spec,) = convert_file(SAMPLE, tmp_path)
-    out = run_match([spec], tmp_path / "matches.csv", top_n=3, preset=preset)
-    rows = read_rows(out)
+    other = tmp_path / "second.csv"
+    other.write_bytes(spec.read_bytes())
+    outs = run_match([spec, other], top_n=3, preset=preset)
+    # One result file per input, named after it, each holding only its own matches.
+    assert [p.name for p in outs] == ["1013-lens5x-fit-pinhole-01-OpenSpecy.csv", "second-OpenSpecy.csv"]
+    assert {r[0] for r in read_rows(outs[1])[1:]} == {"second.csv"}
+    rows = read_rows(outs[0])
     header, body = rows[0], rows[1:]
     assert len(body) == 3
+    assert {r[header.index("input_file")] for r in body} == {spec.name}
     rank = header.index("rank")
     score = [float(r[header.index("match_val")]) for r in body]
     assert [r[rank] for r in body] == ["1", "2", "3"]
