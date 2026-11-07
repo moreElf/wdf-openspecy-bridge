@@ -54,6 +54,22 @@ wdf2csv-gui
 
 Add `.wdf` files, optionally choose an output folder, pick a header style, and press **Convert**.
 
+### Desktop app (Windows, prototype)
+
+The GUI can also be packaged as a normal Windows app. You start it by double-clicking `WDF2CSV.exe`, with no terminal and no Python install.
+
+```powershell
+pip install -e ".[app]"
+pyinstaller packaging/wdf2csv.spec --noconfirm
+```
+
+- The build produces the folder `dist\WDF2CSV\` (about 50 MB) containing `WDF2CSV.exe`. To hand it to someone, zip that whole folder; the exe does not work on its own.
+- **Conversion (Phase 1)** works with nothing else installed.
+- **Identification (Phase 2)** is not bundled. It uses an R + OpenSpecy install on the same PC, found the same way as the CLI (see Phase 2 below). Without one, the checkbox reads "Identify with OpenSpecy (R not found)" and is disabled.
+- R is left out on purpose. R plus OpenSpecy and its packages would add a few hundred MB. OpenSpecy also downloads and caches its reference libraries inside its own package folder, which an app bundle should not have to write into.
+- **Anaconda builds:** if the build Python comes from Anaconda, the spec also copies the Tcl/Tk, OpenSSL and similar DLLs from `Library\bin`. Without them the app stops at `import tkinter`. A python.org Python needs nothing extra.
+- **Not code-signed:** Windows SmartScreen may warn on first launch ("More info" → "Run anyway").
+
 ## Phase 2: OpenSpecy identification (optional)
 
 1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also looks in `C:\Program Files\R\R-*` and in the per-user location `%LOCALAPPDATA%\Programs\R\R-*`. For a per-user install without admin rights, run `winget install RProject.R --override "/VERYSILENT /CURRENTUSER"`.

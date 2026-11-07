@@ -45,6 +45,8 @@ class App(tk.Tk):
         match_cb = ttk.Checkbutton(opts, text="Identify with OpenSpecy (R)", variable=self.do_match)
         match_cb.pack(side="left", padx=8)
         if find_rscript() is None:
+            # The desktop app does not bundle R; say why the option is greyed out.
+            match_cb.config(text="Identify with OpenSpecy (R not found)")
             match_cb.state(["disabled"])
 
         self.run_btn = ttk.Button(self, text="Convert", command=self.run)
