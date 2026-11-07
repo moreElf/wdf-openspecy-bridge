@@ -12,6 +12,7 @@ dependencies = ["renishaw-wdf>=1.4.0", "numpy"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
+app = ["pyinstaller>=6"]
 
 [project.scripts]
 wdf2csv = "wdf_openspecy_bridge.cli:main"

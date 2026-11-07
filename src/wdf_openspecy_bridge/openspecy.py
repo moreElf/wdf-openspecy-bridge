@@ -127,7 +127,9 @@ def run_match(
     outs = [result_path(Path(f)) for f in csv_files]
     pairs = [str(p) for f, out in zip(csv_files, outs, strict=True) for p in (f, out)]
     cmd = [rscript, str(R_SCRIPT), preset, library, lib_type, spectrum_type, str(top_n), *pairs]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    # Rscript is a console program; without this the desktop app flashes a terminal window on Windows.
+    flags: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # only defined on Windows
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", creationflags=flags)
     if proc.returncode != 0:
         raise RuntimeError(f"OpenSpecy match failed:\n{proc.stderr.strip()}")
     return outs
