@@ -54,9 +54,11 @@ wdf2csv-gui
 
 Add `.wdf` files, optionally choose an output folder, pick a header style, and press **Convert**.
 
-### Desktop app (Windows, prototype)
+### Desktop app (Windows and macOS, prototype)
 
-The GUI can also be packaged as a normal Windows app. You start it by double-clicking `WDF2CSV.exe`, with no terminal and no Python install.
+The GUI can also be packaged as a normal desktop app: `WDF2CSV.exe` on Windows, `WDF2CSV.app` on macOS. You start it by double-clicking, with no terminal and no Python install. PyInstaller cannot cross-compile, so build each one on its own OS from the same spec.
+
+#### Windows
 
 ```powershell
 pip install -e ".[app]"
@@ -70,9 +72,20 @@ pyinstaller packaging/wdf2csv.spec --noconfirm
 - **Anaconda builds:** if the build Python comes from Anaconda, the spec also copies the Tcl/Tk, OpenSSL and similar DLLs from `Library\bin`. Without them the app stops at `import tkinter`. A python.org Python needs nothing extra.
 - **Not code-signed:** Windows SmartScreen may warn on first launch ("More info" → "Run anyway").
 
+#### macOS (Apple Silicon)
+
+```bash
+bash packaging/build_macos.sh
+```
+
+- Needs a Mac; the step-by-step guide (Python from python.org, R, Gatekeeper, troubleshooting) is in [docs/build-macos.md](docs/build-macos.md).
+- Produces `dist/WDF2CSV.app` (arm64) and `dist/WDF2CSV-macos-arm64.zip`. Share the zip made by the script (`ditto`), not one made with `zip -r`.
+- **Not signed or notarized** (ad-hoc signature only): on first launch use right-click → Open, or System Settings → Privacy & Security → "Open Anyway".
+- **Not yet built or run on a real Mac.** The macOS branches are unit-tested on Windows only.
+
 ## Phase 2: OpenSpecy identification (optional)
 
-1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also looks in `C:\Program Files\R\R-*` and in the per-user location `%LOCALAPPDATA%\Programs\R\R-*`. For a per-user install without admin rights, run `winget install RProject.R --override "/VERYSILENT /CURRENTUSER"`.
+1. Install R ≥ 4.1 from https://cran.r-project.org/. Make sure `Rscript` is on PATH. On Windows the tool also looks in `C:\Program Files\R\R-*` and in the per-user location `%LOCALAPPDATA%\Programs\R\R-*`. For a per-user install without admin rights, run `winget install RProject.R --override "/VERYSILENT /CURRENTUSER"`. On macOS it also looks in `/Library/Frameworks/R.framework/Resources/bin` (CRAN installer), `/opt/homebrew/bin` and `/usr/local/bin`, because an app started from Finder does not get the shell's PATH.
 2. In R, run `install.packages("OpenSpecy")` (CRAN 2.0.x).
 3. Run:
 

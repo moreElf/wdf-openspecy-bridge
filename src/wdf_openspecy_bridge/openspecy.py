@@ -8,23 +8,23 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .platform_utils import background_process_kwargs, rscript_candidates
+
 R_SCRIPT = Path(__file__).with_name("openspecy_match.R")
 
 
 def find_rscript() -> str | None:
-    """Locate Rscript on PATH, or in the standard Windows install locations."""
+    """Locate Rscript on PATH, or in the standard install locations of this OS.
+
+    The explicit locations matter for the desktop app: a macOS .app started from Finder
+    does not inherit the shell's PATH, and a Windows R install is not put on PATH.
+    """
     found = shutil.which("Rscript")
     if found:
         return found
-    if os.name == "nt":
-        bases = [
-            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "R",
-            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "R",  # per-user install
-        ]
-        for base in bases:
-            candidates = sorted(base.glob("R-*/bin/Rscript.exe"), reverse=True)
-            if candidates:
-                return str(candidates[0])
+    for candidate in rscript_candidates():
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
     return None
 
 
@@ -127,9 +127,9 @@ def run_match(
     outs = [result_path(Path(f)) for f in csv_files]
     pairs = [str(p) for f, out in zip(csv_files, outs, strict=True) for p in (f, out)]
     cmd = [rscript, str(R_SCRIPT), preset, library, lib_type, spectrum_type, str(top_n), *pairs]
-    # Rscript is a console program; without this the desktop app flashes a terminal window on Windows.
-    flags: int = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # only defined on Windows
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", creationflags=flags)
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, encoding="utf-8", **background_process_kwargs()
+    )
     if proc.returncode != 0:
         raise RuntimeError(f"OpenSpecy match failed:\n{proc.stderr.strip()}")
     return outs
