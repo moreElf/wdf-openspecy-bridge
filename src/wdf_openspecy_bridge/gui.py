@@ -9,6 +9,7 @@ from tkinter import filedialog, scrolledtext, ttk
 
 from .convert import convert_file, output_key
 from .openspecy import find_rscript, run_match, summarize_result
+from .platform_utils import wdf_filetypes
 
 
 class App(tk.Tk):
@@ -55,7 +56,7 @@ class App(tk.Tk):
         self.log.pack(fill="both", expand=True, padx=8, pady=8)
 
     def add_files(self) -> None:
-        picked = filedialog.askopenfilenames(filetypes=[("Renishaw WiRE", "*.wdf"), ("All files", "*.*")])
+        picked = filedialog.askopenfilenames(filetypes=wdf_filetypes())
         self.files.extend(Path(p) for p in picked)
         self.count.config(text=f"{len(self.files)} files")
 
