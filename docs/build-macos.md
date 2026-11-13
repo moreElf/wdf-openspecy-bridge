@@ -45,9 +45,9 @@ git checkout feat/macos-app          # マージ後は不要
 bash packaging/build_macos.sh
 ```
 
-`git clone` には Command Line Tools（と private リポジトリへのアクセス権）が要る。git を使わない場合：
+`git clone` には Command Line Tools が要る。git を使わない場合：
 
-1. ブラウザで GitHub にログインし、https://github.com/moreElf/wdf-openspecy-bridge を開く（private リポジトリなのでログインが必要）
+1. ブラウザで https://github.com/moreElf/wdf-openspecy-bridge を開く（private に変更されている場合は GitHub へのログインが要る）
 2. ブランチを `feat/macos-app` に切り替え（マージ後は `main`）、「Code」→「Download ZIP」
 3. 展開してターミナルでそのフォルダに移動し、`bash packaging/build_macos.sh`
 
