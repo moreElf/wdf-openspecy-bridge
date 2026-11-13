@@ -3,6 +3,11 @@
 `WDF2CSV.app` を Mac 実機でビルドする手順。PyInstaller はクロスコンパイルできないので、Mac 用アプリは Mac の上でしか作れない（Windows では作れない）。
 
 > 状態：試作。この手順と `packaging/build_macos.sh` は Windows 上で書いたもので、**Mac 実機ではまだ一度もビルド・起動していない**。初回の実機ビルドでつまずいたらこの文書を直すこと。
+>
+> 実機で確かめていない主な点：
+> - `.app` のビルド・起動、Gatekeeper の挙動、ダークモードの表示
+> - Finder から起動した `.app` での R の検出と同定の実行
+> - Finder 起動時は `LANG` などのロケール環境変数が設定されないため、日本語を含むパス（フォルダ名・ファイル名）を Rscript が正しく扱えるか
 
 ## 1. 前提
 
@@ -10,7 +15,7 @@
 |---|---|
 | Mac | Apple Silicon（M1 以降）、macOS 11 Big Sur 以降 |
 | Python | **3.12（python.org の macOS 64-bit universal2 インストーラ推奨）**。3.10 以上なら動く想定 |
-| Xcode | 不要。`codesign` / `lipo` / `ditto` は macOS 標準で入っている |
+| Command Line Tools | **必要**。`xcode-select --install` で入れる（Xcode 本体は不要）。PyInstaller は arm64 指定時に universal2 の Python バイナリを `lipo -thin` で切り出すため、`lipo` が要る。`git` も Command Line Tools に含まれる。入っているかは `xcode-select -p` で確認 |
 | ディスク | venv とビルドで約 500 MB |
 
 ### Python の入手
@@ -40,10 +45,18 @@ git checkout feat/macos-app          # マージ後は不要
 bash packaging/build_macos.sh
 ```
 
+`git clone` には Command Line Tools（と private リポジトリへのアクセス権）が要る。git を使わない場合：
+
+1. ブラウザで GitHub にログインし、https://github.com/moreElf/wdf-openspecy-bridge を開く（private リポジトリなのでログインが必要）
+2. ブランチを `feat/macos-app` に切り替え（マージ後は `main`）、「Code」→「Download ZIP」
+3. 展開してターミナルでそのフォルダに移動し、`bash packaging/build_macos.sh`
+
+（ビルド自体には Command Line Tools がどのみち必要。）
+
 スクリプトがやること（`set -euo pipefail`、途中で失敗したら止まる）：
 
-1. macOS か、Python が arm64 ネイティブか、Tk 8.6 以上かを確認
-2. リポジトリ内に venv `.venv-macos` を作り、`pip install -e ".[app,dev]"`（システムには何も入れない）
+1. macOS か、Command Line Tools があるか、Python が arm64 ネイティブか、Tk 8.6 以上かを確認
+2. リポジトリ内に venv `.venv-macos` を作り（既存の venv が別アーキテクチャなら止まる）、`pip install -e ".[app,dev]"`（システムには何も入れない）
 3. `pytest` を実行（`SKIP_TESTS=1` で省略）
 4. `pyinstaller packaging/wdf2csv.spec --noconfirm`
 5. `lipo -archs` でアーキテクチャ、`codesign --verify` で署名を確認
@@ -118,6 +131,8 @@ Finder から起動した `.app` は `PATH` が `/usr/bin:/bin:/usr/sbin:/sbin` 
 | "DEPRECATION WARNING: The system version of Tk is deprecated" / ウィンドウが真っ黒・崩れる | `/usr/bin/python3`（Tk 8.5）を使っている | python.org の Python 3.12 でビルドし直す |
 | `ModuleNotFoundError: No module named '_tkinter'` | Homebrew Python に Tk が入っていない | `brew install python-tk@3.12`（Python のバージョンに合わせる） |
 | ダークモードで文字が読みにくい・ログ欄だけ白い | Tk のバージョンによってダークモード対応が不完全 | Tk 8.6.13 以降（python.org 3.12 同梱）を使う。それでも駄目なら spec の `info_plist` に `"NSRequiresAquaSystemAppearance": True` を足してライトモード固定でビルド |
+| `xcrun: error: invalid active developer path` / ビルド中に `lipo` が失敗する | Command Line Tools が入っていない（macOS のアップデート後に消えることもある） | `xcode-select --install` |
+| `.venv-macos runs as x86_64 but the target is arm64` で止まる / 以前と違う Python に替えたらおかしい | `.venv-macos` が別の Python・別アーキテクチャで作られている | `rm -rf .venv-macos` で消してスクリプトをやり直す |
 | 同定が "R not found" のまま | R がアプリの探す場所にない | 5 の場所に入れる。`ls /Library/Frameworks/R.framework/Resources/bin/Rscript` で確認 |
 | ターミナルの `wdf2csv-gui` では R が見つかるのに `.app` では見つからない | Finder 起動時は PATH が最小 | 同上（PATH の設定では解決しない） |
 | スクリプトが "runs as x86_64 but the target is arm64" で止まる | Rosetta 上の Python / Intel 版 Homebrew（`/usr/local`）の Python | `arch` と `which python3.12` を確認し、python.org 版か `/opt/homebrew` の Python を使う |
